@@ -1,6 +1,48 @@
 require_relative 'error'
 
 module PrdxEngine
+
+  class SavFile
+    def self.obfuscate_file from, to="#{from}.changed"
+      strings = {}
+      replacements = {}
+      str = ''
+      change_line = lambda { |out|
+        unless str.empty?
+          unless strings.has_key? str
+            # new value has to be added
+            len = str.length
+            num = !/^\d+$/.match(str).nil?
+            cap = !/^[A-Z]+$/.match(str).nil? unless num
+            l = "#{num ? '0' : (cap ? 'A' : 'a')}_#{len}"
+            if replacements.has_key? l
+              replacements[l] = replacements[l].succ
+            else
+              replacements[l] = l[0] * len
+            end
+            strings[str] = replacements[l]
+          end
+
+          out.write strings[str]
+          str = ''
+        end
+      }
+      File.open(from, 'r') do |fin|
+        File.open(to, 'w') do |fout|
+          fin.each_char do |c|
+            if (c > ' ') && !('={}"-.'.include? c)
+              str += c
+            else
+              change_line.call fout
+              fout.write(c)
+            end
+          end
+          change_line.call fout
+        end
+      end
+    end
+  end # class SavFile
+
   class << self
     def sav_parse str
       out = {}
