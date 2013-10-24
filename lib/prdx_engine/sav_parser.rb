@@ -2,58 +2,64 @@ require_relative 'error'
 
 module PrdxEngine
 
-  class SavFile
-    def self.obfuscate_file from, to="#{from}.changed"
-      strings = {}
-      replacements = {}
-      str = ''
-      change_line = lambda { |out|
-        unless str.empty?
-          unless strings.has_key? str
-            # new value has to be added
-            len = str.length
-            num = !/^\d+$/.match(str).nil?
-            cap = !/^[A-Z]+$/.match(str).nil? unless num
-            l = "#{num ? '0' : (cap ? 'A' : 'a')}_#{len}"
-            if replacements.has_key? l
-              replacements[l] = replacements[l].succ
-            else
-              replacements[l] = l[0] * len
+  class SavParser
+    class << self
+      def obfuscate_file from, to="#{from}.changed"
+        strings = {}
+        replacements = {}
+        str = ''
+        change_line = lambda { |out|
+          unless str.empty?
+            unless strings.has_key? str
+              # new value has to be added
+              len = str.length
+              num = !/^\d+$/.match(str).nil?
+              cap = !/^[A-Z]+$/.match(str).nil? unless num
+              l = "#{num ? '0' : (cap ? 'A' : 'a')}_#{len}"
+              if replacements.has_key? l
+                replacements[l] = replacements[l].succ
+              else
+                replacements[l] = l[0] * len
+              end
+              strings[str] = replacements[l]
             end
-            strings[str] = replacements[l]
+    
+            out.write strings[str]
+            str = ''
           end
+        }
+        File.open(from, 'r') do |fin|
+          File.open(to, 'w') do |fout|
+            fin.each_char do |c|
+              if (c > ' ') && !('={}"-.'.include? c)
+                str += c
+              else
+                change_line.call fout
+                fout.write(c)
+              end
+            end
+            change_line.call fout
+          end
+        end
+      end
+    
+      def parse_file filename
+        contents = File.read filename
+        parse contents
+      end
 
-          out.write strings[str]
-          str = ''
-        end
-      }
-      File.open(from, 'r') do |fin|
-        File.open(to, 'w') do |fout|
-          fin.each_char do |c|
-            if (c > ' ') && !('={}"-.'.include? c)
-              str += c
-            else
-              change_line.call fout
-              fout.write(c)
-            end
-          end
-          change_line.call fout
-        end
+      def parse str
+        PrdxEngine.sav_parse str
       end
     end
   end # class SavFile
 
   class << self
     def sav_parse str
-      out = {}
-      out.compare_by_identity
+      out = Hash.new { |h,k| h[k] = [] }
+      #out.compare_by_identity
       _sav_parse out, str.to_s.clone.freeze
       out
-    end
-
-    def sav_parse_file filename
-      contents = File.read filename
-      sav_parse contents
     end
 
     private
@@ -83,7 +89,7 @@ module PrdxEngine
         when '='
           #puts '='
           if values.length > 1
-            values[0..-2].each { |item| out[''] = item }
+            values[0..-2].each { |item| out[''] << item }
           elsif values.empty?
             raise Error, "'=' without anything before, character #{i}, out=#{out}"
           end
@@ -92,15 +98,19 @@ module PrdxEngine
         when '{'
           #puts '{'
           # parse nested {}
-          res = {}
-          res.compare_by_identity
+          res = Hash.new { |h,k| h[k] = [] }
+          #res.compare_by_identity
           i = _sav_parse(res, str, i + 1, str_end)
           # name might be nil but it is ok
-          out[name] = res
+          if res.keys == ['']
+            out[name] << res['']
+          else
+            out[name] << res
+          end
           name = ''
         when '}'
           #puts '}'
-          values.each { |item| out[''] = item }
+          values.each { |item| out[''] << item }
           values = []
           break if str_begin > 0
           raise Error, "'}' without '{' at #{i}"
@@ -125,7 +135,7 @@ module PrdxEngine
         end
 
         if !name.nil? and !name.empty? and !values.empty?
-          out[name] = values.shift
+          out[name] << values.shift
           name = ''
         end
         #puts "Name #{name}, values: #{values.inspect}"
@@ -138,9 +148,10 @@ module PrdxEngine
 
       #puts "Values out: #{values.inspect}"
       # add remaining values
-      values.each { |item| out[''] = item }
+      values.each { |item| out[''] << item }
 
       #puts "#{str_begin} Out=#{out}" if str_begin == 0
+      #puts "Out=#{out}" if str_begin == 0
 
       i
     end
