@@ -13,7 +13,7 @@ Gem::Specification.new do |spec|
   spec.homepage      = "http://github.com/mingulov/prdx_engine"
   spec.license       = "MIT"
 
-  spec.required_ruby_version = '>= 1.9'
+  #spec.required_ruby_version = '>= 1.9'
 
   spec.files         = `git ls-files`.split($/)
   spec.executables   = spec.files.grep(%r{^bin/}) { |f| File.basename(f) }
