@@ -42,6 +42,45 @@ module PrdxEngine
           end
         end
       end
+
+      def generate_file_content h, depth = 0
+        str = ''
+        h.each { |k, vArr|
+          vArr.each { |v|
+            if v.is_a? Array
+              s = '  ' * depth
+              s += "#{k}=\n" unless k.empty?
+              s += "#{'  ' * depth}{\n"
+              v.each { |item| 
+                if item.is_a? Array
+                  s += "#{'  ' * (depth + 1)}{\n"
+                  #{generate_file_content(item, depth + 2)}
+                  s += "#{'  ' * (depth + 1)}}\n"
+                  raise Error, "Array with nested array?"
+                elsif item.is_a? Hash
+                  s += "#{'  ' * (depth + 1)}{\n#{generate_file_content(item, depth + 2)}#{'  ' * (depth + 1)}}\n"
+                else
+                  s += "#{item}\n"
+                end
+              }
+              #{generate_file_content(v, depth + 1)}
+              s += "#{'  ' * depth}}\n"
+              str += s
+            elsif v.is_a? Hash
+              s = '  ' * depth
+              s += "#{k}=\n" unless k.empty?
+              s += "#{'  ' * depth}{\n#{generate_file_content(v, depth + 1)}#{'  ' * depth}}\n"
+              str += s
+            else
+              s = '  ' * depth
+              s += "#{k}=" unless k.empty?
+              s += "#{v}\n"
+              str += s
+            end
+          }
+        }
+        str
+      end
     
       def parse_file filename
         contents = File.read filename
